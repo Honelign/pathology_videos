@@ -1,12 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
-import 'package:path/path.dart' as path;
 
 void main() {
   runApp(const MyApp());
@@ -38,19 +35,11 @@ class _HomePageState extends State<HomePage> {
   String? _directoryPath;
   List<File> _videoFiles = [];
   VideoPlayerController? _controller;
-  String? _thumbnailsDir;
 
   @override
   void initState() {
     super.initState();
-    _initThumbnailsDir();
     _loadSavedPath();
-  }
-
-  Future<void> _initThumbnailsDir() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    _thumbnailsDir = path.join(appDir.path, 'thumbnails');
-    await Directory(_thumbnailsDir!).create(recursive: true);
   }
 
   Future<void> _loadSavedPath() async {
@@ -76,10 +65,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadVideos() async {
+    debugPrint('loading Videos');
+    debugPrint('directory path $_directoryPath');
+
     if (_directoryPath == null) return;
+    debugPrint('loading Videos passed');
 
     final directory = Directory(_directoryPath!);
+
+    debugPrint('loading Videos passed 1');
+    debugPrint('loading Videos passed 1 directory $directory');
+    debugPrint('${directory.list().length}');
+
     final List<FileSystemEntity> entities = await directory.list().toList();
+
+    debugPrint('loading Videos passed 2 $entities');
+
     setState(() {
       _videoFiles = entities.whereType<File>().where((file) {
         final extensionIndex = file.path.lastIndexOf('.');
@@ -88,25 +89,7 @@ class _HomePageState extends State<HomePage> {
         return ['.mp4', '.avi', '.mov', '.mkv'].contains(extension);
       }).toList();
     });
-  }
-
-  Future<String> _getThumbnail(File videoFile) async {
-    final thumbnailPath =
-        path.join(_thumbnailsDir!, '${path.basename(videoFile.path)}.jpg');
-    final thumbnailFile = File(thumbnailPath);
-
-    if (await thumbnailFile.exists()) {
-      return thumbnailPath;
-    }
-
-    final thumbnail = await VideoThumbnail.thumbnailFile(
-      video: videoFile.path,
-      thumbnailPath: thumbnailPath,
-      imageFormat: ImageFormat.JPEG,
-      quality: 75,
-    );
-
-    return thumbnail ?? 'assets/thumb96.png';
+    debugPrint('loading Videos passed 3 $_videoFiles');
   }
 
   Future<void> _playVideo(File file) async {
@@ -133,36 +116,13 @@ class _HomePageState extends State<HomePage> {
       ),
       body: _directoryPath == null
           ? const Center(child: Text('Please select a directory'))
-          : GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 16 / 9,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
+          : ListView.builder(
               itemCount: _videoFiles.length,
               itemBuilder: (context, index) {
                 final file = _videoFiles[index];
-                return GestureDetector(
+                return ListTile(
+                  title: Text(file.path.split('/').last),
                   onTap: () => _playVideo(file),
-                  child: FutureBuilder<String>(
-                    future: _getThumbnail(file),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done &&
-                          snapshot.hasData) {
-                        return CachedNetworkImage(
-                          imageUrl: snapshot.data!,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) =>
-                              Container(color: Colors.grey),
-                          errorWidget: (context, url, error) =>
-                              const Icon(Icons.error),
-                        );
-                      } else {
-                        return Container(color: Colors.grey);
-                      }
-                    },
-                  ),
                 );
               },
             ),
