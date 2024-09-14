@@ -39,6 +39,7 @@ class _HomePageState extends State<HomePage> {
   List<File> _videoFiles = [];
   VideoPlayerController? _controller;
   String? _thumbnailsDir;
+  bool _isPlaying = false;
 
   @override
   void initState() {
@@ -81,12 +82,11 @@ class _HomePageState extends State<HomePage> {
     final directory = Directory(_directoryPath!);
     final List<FileSystemEntity> entities = await directory.list().toList();
     setState(() {
-      _videoFiles = entities.whereType<File>().where((file) {
-        final extensionIndex = file.path.lastIndexOf('.');
-        if (extensionIndex == -1) return false; // No extension found
-        final extension = file.path.substring(extensionIndex).toLowerCase();
-        return ['.mp4', '.avi', '.mov', '.mkv'].contains(extension);
-      }).toList();
+      _videoFiles = entities
+          .whereType<File>()
+          .where((file) => ['.mp4', '.avi', '.mov', '.mkv'].contains(
+              file.path.substring(file.path.lastIndexOf('.')).toLowerCase()))
+          .toList();
     });
   }
 
@@ -106,7 +106,7 @@ class _HomePageState extends State<HomePage> {
       quality: 75,
     );
 
-    return thumbnail ?? 'assets/thumb96.png';
+    return thumbnail ?? 'assets/placeholder_thumbnail.png';
   }
 
   Future<void> _playVideo(File file) async {
@@ -115,7 +115,9 @@ class _HomePageState extends State<HomePage> {
     }
     _controller = VideoPlayerController.file(file);
     await _controller!.initialize();
-    setState(() {});
+    setState(() {
+      _isPlaying = true;
+    });
     await _controller!.play();
   }
 
@@ -131,48 +133,16 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: _directoryPath == null
-          ? const Center(child: Text('Please select a directory'))
-          : GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 16 / 9,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemCount: _videoFiles.length,
-              itemBuilder: (context, index) {
-                final file = _videoFiles[index];
-                return GestureDetector(
-                  onTap: () => _playVideo(file),
-                  child: FutureBuilder<String>(
-                    future: _getThumbnail(file),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.done &&
-                          snapshot.hasData) {
-                        return CachedNetworkImage(
-                          imageUrl: snapshot.data!,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) =>
-                              Container(color: Colors.grey),
-                          errorWidget: (context, url, error) =>
-                              const Icon(Icons.error),
-                        );
-                      } else {
-                        return Container(color: Colors.grey);
-                      }
-                    },
-                  ),
-                );
-              },
-            ),
-      floatingActionButton: _controller != null
+      body: _isPlaying ? _buildVideoPlayer() : _buildVideoList(),
+      floatingActionButton: _isPlaying
           ? FloatingActionButton(
               onPressed: () {
                 setState(() {
-                  _controller!.value.isPlaying
-                      ? _controller!.pause()
-                      : _controller!.play();
+                  if (_controller!.value.isPlaying) {
+                    _controller!.pause();
+                  } else {
+                    _controller!.play();
+                  }
                 });
               },
               child: Icon(
@@ -180,6 +150,71 @@ class _HomePageState extends State<HomePage> {
               ),
             )
           : null,
+    );
+  }
+
+  Widget _buildVideoPlayer() {
+    return Column(
+      children: [
+        AspectRatio(
+          aspectRatio: _controller!.value.aspectRatio,
+          child: VideoPlayer(_controller!),
+        ),
+        VideoProgressIndicator(_controller!, allowScrubbing: true),
+        ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _isPlaying = false;
+              _controller!.pause();
+            });
+          },
+          child: const Text('Back to Video List'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVideoList() {
+    if (_directoryPath == null) {
+      return const Center(child: Text('Please select a directory'));
+    }
+    return GridView.builder(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 16 / 9,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+      ),
+      itemCount: _videoFiles.length,
+      itemBuilder: (context, index) {
+        final file = _videoFiles[index];
+        return GestureDetector(
+          onTap: () => _playVideo(file),
+          child: FutureBuilder<String>(
+            future: _getThumbnail(file),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.done &&
+                  snapshot.hasData) {
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(
+                      File(snapshot.data!),
+                      fit: BoxFit.cover,
+                    ),
+                    const Center(
+                      child: Icon(Icons.play_circle_outline,
+                          size: 50, color: Colors.white),
+                    ),
+                  ],
+                );
+              } else {
+                return Container(color: Colors.grey);
+              }
+            },
+          ),
+        );
+      },
     );
   }
 
