@@ -90,6 +90,7 @@ class _HomePageState extends State<HomePage> {
       }).toList();
     });
     debugPrint('loading Videos passed 3 $_videoFiles');
+    debugPrint('loading Videos passed 3 $_videoFiles');
   }
 
   Future<void> _playVideo(File file) async {
